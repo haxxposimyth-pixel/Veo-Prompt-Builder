@@ -80,16 +80,16 @@ export interface PromptAssemblyInputs {
   phase: number | null;
   bible?: string | null;
   blueprint?: string | null;
+  category?: string | null;
+  subNiche?: string | null;
 }
 
 export function assembleInstruction(inputs: PromptAssemblyInputs): { systemInstruction: string; userPrompt: string } {
   // 1. Select Active Niche DNA pack
-  let activeNicheDna = "";
-  if (inputs.niche === "Custom" && inputs.customNiche) {
-    activeNicheDna = `CUSTOM ARCHITECTURAL DNA:\n${inputs.customNiche}`;
-  } else {
-    activeNicheDna = NICHE_DNA_PACKS[inputs.niche] || NICHE_DNA_PACKS["Health & Biology"];
-  }
+  const activeNicheDna =
+    (inputs.customNiche && inputs.customNiche.trim())
+      ? inputs.customNiche
+      : (NICHE_DNA_PACKS[inputs.niche] || "");
 
   // 2. Build full dynamically configured System Instruction
   const fullSystemInstruction = `${SYSTEM_INSTRUCTION}
@@ -104,14 +104,16 @@ NARRATION LANGUAGE: write ALL narration ONLY in ${inputs.language}, native scrip
   // 3. Build user prompt instruction based on Workflow Mode
   let userPrompt = "";
   if (inputs.mode === "analysis") {
-    userPrompt = `TOPIC: ${inputs.topic}\nRun the Analysis Engine. Output only the analysis sections.`;
+    const subFocus = (inputs.subNiche && inputs.subNiche.trim()) ? `\nSUB-FOCUS: ${inputs.subNiche}` : "";
+    userPrompt = `TOPIC: ${inputs.topic}${subFocus}\nRun the Analysis Engine. Output only the analysis sections.`;
   } else if (inputs.mode === "phase") {
     const phaseNum = inputs.phase || 1;
     const startScene = (phaseNum - 1) * 18 + 1;
     const endScene = phaseNum * 18;
     const bibleBlock = inputs.bible ? `LOCKED PRODUCTION BIBLE:\n${inputs.bible}\n\n` : "";
     const blueprintBlock = inputs.blueprint ? `LOCKED EMOTION/VISUAL BLUEPRINT:\n${inputs.blueprint}\n\n` : "";
-    userPrompt = `${bibleBlock}${blueprintBlock}TOPIC: ${inputs.topic}
+    const subFocus = (inputs.subNiche && inputs.subNiche.trim()) ? `\nSUB-FOCUS: ${inputs.subNiche}` : "";
+    userPrompt = `${bibleBlock}${blueprintBlock}TOPIC: ${inputs.topic}${subFocus}
 This is Phase ${phaseNum} of a single 180-scene documentary. Generate EXACTLY 18 scenes,
 numbered prompt [${startScene}]..prompt [${endScene}], in the full per-scene format.
 Maintain strict visual, tonal, and character continuity with the Production Bible above so

@@ -3,6 +3,8 @@ package com.example.presentation.ui
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -344,6 +346,21 @@ fun ProjectSpecsHeroHeader(project: Project) {
                             color = MutedText,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
+                    }
+                    if (project.subNiche.isNotEmpty()) {
+                        Surface(
+                            color = CharcoalSurface,
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.padding(1.dp)
+                        ) {
+                            Text(
+                                text = project.subNiche.uppercase(),
+                                fontSize = 9.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MutedText,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
                     }
                     if (project.customNiche != null) {
                         Surface(
@@ -738,6 +755,22 @@ fun PromptsSetsTabContent(
 
     val selectedSet = generatedSets.getOrNull(selectedSetTab) ?: generatedSets.first()
 
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    val allText = generatedSets.joinToString("\n\n") { it.text }
+                    outputStream.write(allText.toByteArray(Charsets.UTF_8))
+                }
+                Toast.makeText(context, "Exported successfully!", Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                Toast.makeText(context, "Failed to save file: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -800,14 +833,21 @@ fun PromptsSetsTabContent(
             // Share / Export file Choice
             OutlinedButton(
                 onClick = {
-                    val allText = generatedSets.joinToString("\n\n") { it.text }
-                    val sendIntent = Intent().apply {
-                        action = Intent.ACTION_SEND
-                        putExtra(Intent.EXTRA_TEXT, allText)
-                        type = "text/plain"
+                    try {
+                        exportLauncher.launch("veo_script_prompt_sheet.txt")
+                    } catch (e: Exception) {
+                        val allText = generatedSets.joinToString("\n\n") { it.text }
+                        val sendIntent = Intent().apply {
+                            action = Intent.ACTION_SEND
+                            putExtra(Intent.EXTRA_TEXT, allText)
+                            type = "text/plain"
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        val shareIntent = Intent.createChooser(sendIntent, "Export VEO Script Prompt Sheet").apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(shareIntent)
                     }
-                    val shareIntent = Intent.createChooser(sendIntent, "Export VEO Script Prompt Sheet")
-                    context.startActivity(shareIntent)
                 },
                 border = BorderStroke(1.dp, AmberAccent.copy(alpha = 0.5f)),
                 shape = RoundedCornerShape(8.dp),

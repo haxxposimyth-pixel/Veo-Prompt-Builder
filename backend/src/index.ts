@@ -61,7 +61,9 @@ app.post('/generate', verifyAppCheckAndAuth, async (req: Request, res: Response)
     phase,
     model,
     bible,
-    blueprint
+    blueprint,
+    category,
+    subNiche
   } = req.body;
 
   // Validation
@@ -96,7 +98,9 @@ app.post('/generate', verifyAppCheckAndAuth, async (req: Request, res: Response)
       language,
       phase: phase || null,
       bible: bible || null,
-      blueprint: blueprint || null
+      blueprint: blueprint || null,
+      category: category || null,
+      subNiche: subNiche || null
     };
 
     // 1. Build prompt dynamically using promptEngine

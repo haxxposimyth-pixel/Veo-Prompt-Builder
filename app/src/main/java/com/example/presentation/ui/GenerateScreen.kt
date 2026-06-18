@@ -40,7 +40,9 @@ fun GenerateScreen(
     val creationState by viewModel.creationState.collectAsState()
 
     // Form Flows
+    val selectedCategory by viewModel.selectedCategory.collectAsState()
     val selectedNiche by viewModel.selectedNiche.collectAsState()
+    val selectedSubNiche by viewModel.selectedSubNiche.collectAsState()
     val customNiche by viewModel.customNiche.collectAsState()
     val selectedStyle by viewModel.selectedStyle.collectAsState()
     val selectedLanguage by viewModel.selectedLanguage.collectAsState()
@@ -48,19 +50,15 @@ fun GenerateScreen(
     val aspectRatio by viewModel.aspectRatio.collectAsState()
 
     // Local Dropdown Expanders
+    var categoryExpanded by remember { mutableStateOf(false) }
     var nicheExpanded by remember { mutableStateOf(false) }
+    var subNicheExpanded by remember { mutableStateOf(false) }
     var styleExpanded by remember { mutableStateOf(false) }
     var langExpanded by remember { mutableStateOf(false) }
 
     // Dialog Expanders
     var showAddStyleDialog by remember { mutableStateOf(false) }
     var showAddLanguageDialog by remember { mutableStateOf(false) }
-
-    val nicheList = listOf(
-        "Health & Biology", "Money & Finance", "Mind & Psychology", 
-        "Nature & Earth", "Space & Cosmos", "Animals & Wildlife", 
-        "Civilization & History", "Business & Startups", "Custom"
-    )
 
     // Trigger redirection on success
     LaunchedEffect(creationState) {
@@ -176,9 +174,60 @@ fun GenerateScreen(
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Category Niche", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
+                        // CATEGORY
+                        Text("Category", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
                         Spacer(modifier = Modifier.height(8.dp))
-                        Box {
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = selectedCategory,
+                                onValueChange = {},
+                                readOnly = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { categoryExpanded = true },
+                                trailingIcon = {
+                                    IconButton(onClick = { categoryExpanded = true }) {
+                                        Icon(Icons.Default.ArrowDropDown, "Open category dropdown")
+                                    }
+                                },
+                                enabled = false,
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                    disabledBorderColor = MaterialTheme.colorScheme.outline
+                                )
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .clickable { categoryExpanded = true }
+                            )
+                            DropdownMenu(
+                                expanded = categoryExpanded,
+                                onDismissRequest = { categoryExpanded = false },
+                                modifier = Modifier.fillMaxWidth(0.9f)
+                            ) {
+                                com.example.data.taxonomy.keys.forEach { catName ->
+                                    DropdownMenuItem(
+                                        text = { Text(catName) },
+                                        onClick = {
+                                            viewModel.selectedCategory.value = catName
+                                            val niches = com.example.data.taxonomy[catName]?.keys?.toList() ?: emptyList()
+                                            val defaultNiche = niches.firstOrNull() ?: ""
+                                            viewModel.selectedNiche.value = defaultNiche
+                                            viewModel.selectedSubNiche.value = ""
+                                            categoryExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // NICHE
+                        Text("Niche", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Box(modifier = Modifier.fillMaxWidth()) {
                             OutlinedTextField(
                                 value = selectedNiche,
                                 onValueChange = {},
@@ -197,19 +246,75 @@ fun GenerateScreen(
                                     disabledBorderColor = MaterialTheme.colorScheme.outline
                                 )
                             )
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .clickable { nicheExpanded = true }
+                            )
                             DropdownMenu(
                                 expanded = nicheExpanded,
                                 onDismissRequest = { nicheExpanded = false },
                                 modifier = Modifier.fillMaxWidth(0.9f)
                             ) {
-                                nicheList.forEach { nicheName ->
+                                val niches = com.example.data.taxonomy[selectedCategory]?.keys?.toList() ?: emptyList()
+                                niches.forEach { nicheName ->
                                     DropdownMenuItem(
                                         text = { Text(nicheName) },
                                         onClick = {
                                             viewModel.selectedNiche.value = nicheName
+                                            val subNiches = com.example.data.taxonomy[selectedCategory]?.get(nicheName) ?: emptyList()
+                                            val defaultSubNiche = subNiches.firstOrNull() ?: ""
+                                            viewModel.selectedSubNiche.value = defaultSubNiche
                                             nicheExpanded = false
                                         }
                                     )
+                                }
+                            }
+                        }
+
+                        val currentSubNiches = com.example.data.taxonomy[selectedCategory]?.get(selectedNiche) ?: emptyList()
+                        if (selectedNiche != "Custom" && currentSubNiches.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text("Sub-Niche Focus", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary, fontSize = 14.sp)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = selectedSubNiche,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { subNicheExpanded = true },
+                                    trailingIcon = {
+                                        IconButton(onClick = { subNicheExpanded = true }) {
+                                            Icon(Icons.Default.ArrowDropDown, "Open sub-niche dropdown")
+                                        }
+                                    },
+                                    enabled = false,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                        disabledBorderColor = MaterialTheme.colorScheme.outline
+                                    )
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .matchParentSize()
+                                        .clickable { subNicheExpanded = true }
+                                )
+                                DropdownMenu(
+                                    expanded = subNicheExpanded,
+                                    onDismissRequest = { subNicheExpanded = false },
+                                    modifier = Modifier.fillMaxWidth(0.9f)
+                                ) {
+                                    currentSubNiches.forEach { subName ->
+                                        DropdownMenuItem(
+                                            text = { Text(subName) },
+                                            onClick = {
+                                                viewModel.selectedSubNiche.value = subName
+                                                subNicheExpanded = false
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }

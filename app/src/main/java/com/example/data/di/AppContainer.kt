@@ -29,6 +29,7 @@ class AppContainerImpl(private val context: Context) : AppContainer {
             AppDatabase::class.java,
             "veo_doc_builder_db"
         )
+        .addMigrations(MIGRATION_2_3)
         .fallbackToDestructiveMigration()
         .build()
     }

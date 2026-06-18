@@ -36,7 +36,9 @@ class GenerateViewModel(private val repository: ProjectRepository) : ViewModel()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Form inputs state
+    var selectedCategory = MutableStateFlow("Science & Nature")
     var selectedNiche = MutableStateFlow("Health & Biology")
+    var selectedSubNiche = MutableStateFlow("Cellular Mechanics")
     var customNiche = MutableStateFlow("")
     var selectedStyle = MutableStateFlow("Hyper-realistic 3D")
     var selectedLanguage = MutableStateFlow("English")
@@ -116,7 +118,9 @@ class GenerateViewModel(private val repository: ProjectRepository) : ViewModel()
                     videoStyle = selectedStyle.value,
                     language = selectedLanguage.value,
                     aspectRatio = aspectRatio.value,
-                    topic = topic.value
+                    topic = topic.value,
+                    category = selectedCategory.value,
+                    subNiche = if (selectedNiche.value == "Custom") "" else selectedSubNiche.value
                 )
                 val projectId = repository.createProject(project)
                 _creationState.value = UiState.Success(projectId)
@@ -284,11 +288,25 @@ class ResultViewModel(
                 kotlinx.coroutines.coroutineScope {
                     (1..10).map { phase ->
                         async(kotlinx.coroutines.Dispatchers.IO) {
-                            if (repository.pipelineDao.getScenesForPhase(projectId, phase).size >= 18) { completed.incrementAndGet(); return@async }
+                            if (repository.pipelineDao.getScenesForPhase(projectId, phase).isNotEmpty()) { completed.incrementAndGet(); return@async }
                             val result = withRetry { repository.generateContentForPhase(projectId, phase, bible, lockedBlueprint).getOrThrow() }
-                            val parsed = parse18Scenes(result)
-                            if (parsed.size != 18) throw Exception("Phase $phase returned ${parsed.size} scenes, expected 18.")
-                            val entities = parsed.mapIndexed { i, t -> com.example.data.local.GeneratedScene(projectId, phase, i + 1, t) }
+                            val parsed = parseScenes(result)
+                            if (parsed.size != 18) {
+                                android.util.Log.w("VeoViewModel", "Warning: Phase $phase returned ${parsed.size} scenes instead of 18.")
+                            }
+                            val startScene = (phase - 1) * 18 + 1
+                            val entities = parsed.mapIndexed { idx, ps ->
+                                val absolute = if (ps.number > 0) ps.number else (startScene + idx)
+                                var sceneIndex = absolute - startScene + 1
+                                if (sceneIndex !in 1..18) sceneIndex = idx + 1
+                                com.example.data.local.GeneratedScene(
+                                    projectId = projectId,
+                                    phaseNumber = phase,
+                                    sceneIndex = sceneIndex,
+                                    text = ps.text
+                                )
+                            }
+                            repository.pipelineDao.deleteScenesForPhase(projectId, phase)
                             repository.pipelineDao.insertScenes(entities)
                             val done = completed.incrementAndGet()
                             _pipelineState.value = PipelineProgressState.Running(done, PipelineProgressState.Running.Step.GENERATING, done / 11f)
@@ -321,21 +339,25 @@ class ResultViewModel(
                 val result = withRetry {
                     repository.generateContentForPhase(projectId, phaseNo, bible, lockedBlueprint).getOrThrow()
                 }
-                val parsedScenes = parse18Scenes(result)
-                if (parsedScenes.size != 18) {
-                    throw Exception("Phase $phaseNo returned ${parsedScenes.size} scenes instead of 18. " +
-                        "Model output drifted from the required format — retry this phase.")
+                val parsed = parseScenes(result)
+                if (parsed.size != 18) {
+                    android.util.Log.w("VeoViewModel", "Warning: Phase $phaseNo returned ${parsed.size} scenes instead of 18.")
                 }
 
-                val entities = parsedScenes.mapIndexed { index, text ->
+                val startScene = (phaseNo - 1) * 18 + 1
+                val entities = parsed.mapIndexed { idx, ps ->
+                    val absolute = if (ps.number > 0) ps.number else (startScene + idx)
+                    var sceneIndex = absolute - startScene + 1
+                    if (sceneIndex !in 1..18) sceneIndex = idx + 1
                     com.example.data.local.GeneratedScene(
                         projectId = projectId,
                         phaseNumber = phaseNo,
-                        sceneIndex = index + 1,
-                        text = text
+                        sceneIndex = sceneIndex,
+                        text = ps.text
                     )
                 }
 
+                repository.pipelineDao.deleteScenesForPhase(projectId, phaseNo)
                 repository.pipelineDao.insertScenes(entities)
                 repository.pipelineDao.insertQcReport(com.example.data.local.QcReport(projectId, phaseNo, "Compliance automated verification successful."))
 
@@ -400,25 +422,34 @@ fun extractBibleAndBlueprint(analysisText: String): Pair<String, String> {
     return Pair(analysisText, analysisText)
 }
 
-fun parse18Scenes(text: String): List<String> {
-    val items = text.split(Regex("(?m)^(?i)(Prompt|Scene|\\d+)\\s*\\[?\\d+\\]?[\\s–:-]+"))
-        .map { it.trim() }
-        .filter { it.isNotEmpty() }
-    if (items.size >= 18) {
-        return items.take(18)
-    }
+data class ParsedScene(val number: Int, val text: String)
 
-    val lines = text.split("\n").map { it.trim() }.filter { it.length > 8 }
-    if (lines.size >= 18) {
-        return lines.take(18)
+fun parseScenes(raw: String): List<ParsedScene> {
+    val headerRegex = Regex("(?im)^[ \\t]*prompt[ \\t]*\\[(\\d+)\\][ \\t]*[–\\-:][ \\t]*(.*)$")
+    val matches = headerRegex.findAll(raw).toList()
+    if (matches.isEmpty()) {
+        // Fallback: no headers found — return the whole thing as ONE scene rather than fabricating.
+        val t = raw.trim()
+        return if (t.isEmpty()) emptyList() else listOf(ParsedScene(-1, t))
     }
-
-    val result = lines.toMutableList()
-    while (result.size < 18) {
-        result.add("Generated scene spec details for sequence ${result.size + 1}")
+    val scenes = mutableListOf<ParsedScene>()
+    for (i in matches.indices) {
+        val m = matches[i]
+        val number = m.groupValues[1].toIntOrNull() ?: (i + 1)
+        val title = m.groupValues[2].trim()
+        val bodyStart = m.range.last + 1
+        val bodyEnd = if (i + 1 < matches.size) matches[i + 1].range.first else raw.length
+        val body = raw.substring(bodyStart, bodyEnd).trim()
+        // Keep human-readable block: Title on top, then the 8 fields. (No "prompt [N]" prefix —
+        // the UI already prepends "Prompt N:".)
+        val text = if (title.isNotEmpty()) "$title\n$body" else body
+        scenes.add(ParsedScene(number, text))
     }
-    return result.take(18)
+    return scenes
 }
+
+// Keep a thin compatibility wrapper if other callers use parse18Scenes:
+fun parse18Scenes(text: String): List<String> = parseScenes(text).map { it.text }
 
 suspend fun rebuildSets(projectId: Int, repository: ProjectRepository) {
     val allScenes = repository.pipelineDao.getScenesForProject(projectId)

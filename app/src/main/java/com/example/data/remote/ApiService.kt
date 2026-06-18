@@ -22,7 +22,9 @@ data class GenerateRequest(
     val phase: Int?,                 // 1 to 10 or null
     val model: String,               // "pro" or "flash"
     val bible: String? = null,
-    val blueprint: String? = null
+    val blueprint: String? = null,
+    val category: String? = null,
+    val subNiche: String? = null
 )
 
 data class GenerateResponse(

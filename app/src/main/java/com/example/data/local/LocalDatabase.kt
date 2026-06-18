@@ -1,6 +1,8 @@
 package com.example.data.local
 
 import androidx.room.*
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
 // ==========================================
@@ -17,7 +19,9 @@ data class Project(
     val language: String,
     val aspectRatio: String,
     val topic: String,
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val category: String = "",
+    val subNiche: String = ""
 )
 
 @Entity(
@@ -146,6 +150,9 @@ interface CustomStyleDao {
 
     @Query("SELECT COUNT(*) FROM custom_styles")
     suspend fun getStyleCount(): Int
+
+    @Query("SELECT name FROM custom_styles")
+    suspend fun getAllStyleNames(): List<String>
 }
 
 @Dao
@@ -223,7 +230,7 @@ interface PipelineDao {
         GeneratedSet::class,
         Titles::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -232,4 +239,11 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun customStyleDao(): CustomStyleDao
     abstract fun languageDao(): LanguageDao
     abstract fun pipelineDao(): PipelineDao
+}
+
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE projects ADD COLUMN category TEXT NOT NULL DEFAULT ''")
+        db.execSQL("ALTER TABLE projects ADD COLUMN subNiche TEXT NOT NULL DEFAULT ''")
+    }
 }
