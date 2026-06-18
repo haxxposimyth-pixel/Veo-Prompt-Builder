@@ -4,26 +4,9 @@ const location = process.env.VERTEX_LOCATION || process.env.GCP_LOCATION || 'us-
 const modelPro = process.env.MODEL_PRO || 'gemini-2.5-pro';
 const modelFlash = process.env.MODEL_FLASH || 'gemini-2.5-flash';
 
-// Instantiate the Vertex AI client using Service Account JSON Key or Default Credentials
-let vertexAI: VertexAI;
-let project = process.env.GCP_PROJECT || 'my-gcp-project';
-
-if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON) {
-  try {
-    const creds = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
-    project = creds.project_id;
-    vertexAI = new VertexAI({
-      project: creds.project_id,
-      location: location,
-      googleAuthOptions: { credentials: creds }
-    });
-  } catch (error) {
-    console.error('Failed to parse GOOGLE_APPLICATION_CREDENTIALS_JSON, falling back to ADC:', error);
-    vertexAI = new VertexAI({ project, location });
-  }
-} else {
-  vertexAI = new VertexAI({ project, location });
-}
+// Instantiate the Vertex AI client using keyless Application Default Credentials (ADC)
+const project = process.env.GCP_PROJECT || 'ytprompt-499319';
+const vertexAI = new VertexAI({ project, location });
 
 // Requirement 1: STARTUP DIAGNOSTICS on boot
 console.log(`[STARTUP DIAGNOSTICS] Resolved Project: ${project}`);
